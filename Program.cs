@@ -17,20 +17,19 @@ namespace SerializerBattle
         private static readonly Book Source = Book.Create();
         private static readonly Func<Task>[] Tests = {BinaronTest, NewtonsoftJsonTest, NetCore3JsonTest};
 
-        public static void Main()
+        public static async Task Main()
         {
             const int loop = 15;
 
             // warm-up
             foreach (var test in Tests)
-                test();
+                await test();
 
-            var tester = new Thread(() => Tester(loop)) {Priority = ThreadPriority.Highest};
-            tester.Start();
-            tester.Join();
+            await Task.Yield();
+            await Tester(loop);
         }
 
-        private static void Tester(int loop)
+        private static async Task Tester(int loop)
         {
             foreach (var test in Tests)
             {
@@ -39,7 +38,7 @@ namespace SerializerBattle
                 sw.Start();
 
                 for (var j = 0; j < loop; j++)
-                    test();
+                    await test();
 
                 sw.Stop();
                 Console.WriteLine($"{test.Method.Name} {sw.ElapsedMilliseconds / loop} ms/op");
