@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using System.Threading;
+using System.Threading.Tasks;
 using Binaron.Serializer;
 using Newtonsoft.Json;
 using JsonSerializer = Newtonsoft.Json.JsonSerializer;
@@ -14,7 +15,7 @@ namespace SerializerBattle
     public class Program
     {
         private static readonly Book Source = Book.Create();
-        private static readonly Action[] Tests = {BinaronTest, NewtonsoftJsonTest, NetCore3JsonTest};
+        private static readonly Func<Task>[] Tests = {BinaronTest, NewtonsoftJsonTest, NetCore3JsonTest};
 
         public static void Main()
         {
@@ -45,20 +46,23 @@ namespace SerializerBattle
             }
         }
 
-        private static void BinaronTest()
+        private static Task BinaronTest()
         {
+            var serializerOptions = new SerializerOptions {SkipNullValues = true};
             using var stream = new MemoryStream();
             for (var i = 0; i < 50; i++)
             {
-                BinaronConvert.Serialize(Source, stream, new SerializerOptions {SkipNullValues = true});
+                BinaronConvert.Serialize(Source, stream, serializerOptions);
                 stream.Position = 0;
                 var book = BinaronConvert.Deserialize<Book>(stream);
                 stream.Position = 0;
                 Trace.Assert(book.Title != null);
             }
+
+            return Task.CompletedTask;
         }
 
-        private static void NewtonsoftJsonTest()
+        private static Task NewtonsoftJsonTest()
         {
             var ser = new JsonSerializer {NullValueHandling = NullValueHandling.Ignore};
             using var stream = new MemoryStream();
@@ -78,16 +82,19 @@ namespace SerializerBattle
                 }
                 stream.Position = 0;
             }
+
+            return Task.CompletedTask;
         }
 
-        private static void NetCore3JsonTest()
+        private static async Task NetCore3JsonTest()
         {
-            using var stream = new MemoryStream();
+            var jsonSerializerOptions = new JsonSerializerOptions {IgnoreNullValues = true};
+            await using var stream = new MemoryStream();
             for (var i = 0; i < 50; i++)
             {
-                CoreJsonSerializer.SerializeAsync(stream, Source, new JsonSerializerOptions {IgnoreNullValues = true}).Wait();
+                await CoreJsonSerializer.SerializeAsync(stream, Source, jsonSerializerOptions);
                 stream.Position = 0;
-                var book = CoreJsonSerializer.DeserializeAsync<Book>(stream).Result;
+                var book = await CoreJsonSerializer.DeserializeAsync<Book>(stream);
                 stream.Position = 0;
                 Trace.Assert(book.Title != null);
             }
