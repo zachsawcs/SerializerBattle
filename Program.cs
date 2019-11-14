@@ -2,14 +2,14 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Threading;
 using System.Text.Json;
+using System.Threading;
 using Binaron.Serializer;
 using Newtonsoft.Json;
 using JsonSerializer = Newtonsoft.Json.JsonSerializer;
 using CoreJsonSerializer = System.Text.Json.JsonSerializer;
 
-namespace ConsoleApp5
+namespace SerializerBattle
 {
     public class Program
     {
@@ -47,38 +47,36 @@ namespace ConsoleApp5
 
         private static void BinaronTest()
         {
+            using var stream = new MemoryStream();
             for (var i = 0; i < 50; i++)
             {
-                using var stream = new MemoryStream();
                 BinaronConvert.Serialize(Source, stream, new SerializerOptions {SkipNullValues = true});
                 stream.Position = 0;
                 var book = BinaronConvert.Deserialize<Book>(stream);
+                stream.Position = 0;
                 Trace.Assert(book.Title != null);
             }
         }
 
         private static void NewtonsoftJsonTest()
         {
+            var ser = new JsonSerializer {NullValueHandling = NullValueHandling.Ignore};
+            using var stream = new MemoryStream();
             for (var i = 0; i < 50; i++)
             {
-                using var stream = new MemoryStream();
                 {
                     using var writer = new StreamWriter(stream, leaveOpen: true);
                     using var jsonWriter = new JsonTextWriter(writer);
-                    {
-                        var ser = new JsonSerializer();
-                        ser.Serialize(jsonWriter, Source);
-                        jsonWriter.Flush();
-                    }
+                    ser.Serialize(jsonWriter, Source);
                 }
                 stream.Position = 0;
                 {
                     using var reader = new StreamReader(stream, leaveOpen: true);
                     using var jsonReader = new JsonTextReader(reader);
-                    var ser = new JsonSerializer();
                     var book = ser.Deserialize<Book>(jsonReader);
                     Trace.Assert(book.Title != null);
                 }
+                stream.Position = 0;
             }
         }
 
