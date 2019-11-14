@@ -82,10 +82,13 @@ namespace SerializerBattle
 
         private static void NetCore3JsonTest()
         {
+            using var stream = new MemoryStream();
             for (var i = 0; i < 50; i++)
             {
-                var bytes = CoreJsonSerializer.SerializeToUtf8Bytes(Source, new JsonSerializerOptions {IgnoreNullValues = true});
-                var book = CoreJsonSerializer.Deserialize<Book>(bytes);
+                CoreJsonSerializer.SerializeAsync(stream, Source, new JsonSerializerOptions {IgnoreNullValues = true}).Wait();
+                stream.Position = 0;
+                var book = CoreJsonSerializer.DeserializeAsync<Book>(stream).Result;
+                stream.Position = 0;
                 Trace.Assert(book.Title != null);
             }
         }
