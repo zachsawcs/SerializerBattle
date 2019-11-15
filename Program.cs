@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
-using System.Threading;
 using System.Threading.Tasks;
 using Binaron.Serializer;
 using Newtonsoft.Json;
@@ -15,7 +14,7 @@ namespace SerializerBattle
     public class Program
     {
         private static readonly Book Source = Book.Create();
-        private static readonly Func<Task>[] Tests = {BinaronTest, NewtonsoftJsonTest, NetCore3JsonTest};
+        private static readonly Func<Task>[] Tests = {NetCore3JsonTest, BinaronTest, NewtonsoftJsonTest};
 
         public static async Task Main()
         {
@@ -87,16 +86,24 @@ namespace SerializerBattle
 
         private static async Task NetCore3JsonTest()
         {
+            var swSerialize = new Stopwatch();
+            var swDeserialize = new Stopwatch();
             var jsonSerializerOptions = new JsonSerializerOptions {IgnoreNullValues = true};
             await using var stream = new MemoryStream();
             for (var i = 0; i < 50; i++)
             {
+                swSerialize.Start();
                 await CoreJsonSerializer.SerializeAsync(stream, Source, jsonSerializerOptions);
+                swSerialize.Stop();
                 stream.Position = 0;
+                swDeserialize.Start();
                 var book = await CoreJsonSerializer.DeserializeAsync<Book>(stream);
+                swDeserialize.Stop();
                 stream.Position = 0;
                 Trace.Assert(book.Title != null);
             }
+            
+            Console.WriteLine($"Serialize: {swSerialize.ElapsedMilliseconds} ms, Deserialize: {swDeserialize.ElapsedMilliseconds} ms");
         }
 
         public class Book
