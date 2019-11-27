@@ -121,7 +121,7 @@ namespace SerializerBattle
             }
 
 #if PRINT_BREAKDOWN
-            Console.WriteLine($"Serialize: {swSerialize.ElapsedMilliseconds} ms, Deserialize: {swDeserialize.ElapsedMilliseconds} ms");
+            Console.WriteLine($"Serialize: {swSerialize.ElapsedMilliseconds / (double) Loop:F3} ms/op, Deserialize: {swDeserialize.ElapsedMilliseconds / (double) Loop:F3} ms/op");
 #endif
         }
 
