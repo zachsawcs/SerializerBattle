@@ -1,4 +1,6 @@
-﻿using System;
+﻿//#define PRINT_BREAKDOWN
+
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -14,15 +16,11 @@ namespace SerializerBattle
     public class Program
     {
         private static readonly Book Source = Book.Create();
-        private static readonly Func<Task>[] Tests = {NetCore3JsonTest, BinaronTest, NewtonsoftJsonTest};
+        private static readonly Func<Task>[] Tests = {BinaronTest, NewtonsoftJsonTest, NetCore3JsonTest};
 
         public static async Task Main()
         {
             const int loop = 15;
-
-            // warm-up
-            foreach (var test in Tests)
-                await test();
 
             await Task.Yield();
             await Tester(loop);
@@ -32,7 +30,13 @@ namespace SerializerBattle
         {
             foreach (var test in Tests)
             {
+                Console.WriteLine($"Warming up before running {test.Method.Name}");
+
+                for (var j = 0; j < loop; j++)
+                    await test(); // pre-warm-up
+
                 Console.WriteLine($"Running {test.Method.Name}");
+
                 var sw = new Stopwatch();
                 sw.Start();
 
@@ -102,8 +106,10 @@ namespace SerializerBattle
                 stream.Position = 0;
                 Trace.Assert(book.Title != null);
             }
-            
+
+#if PRINT_BREAKDOWN
             Console.WriteLine($"Serialize: {swSerialize.ElapsedMilliseconds} ms, Deserialize: {swDeserialize.ElapsedMilliseconds} ms");
+#endif
         }
 
         public class Book
