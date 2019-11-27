@@ -15,36 +15,39 @@ namespace SerializerBattle
 {
     public class Program
     {
+        private const int Loop = 150;
+
         private static readonly Book Source = Book.Create();
-        private static readonly Func<Task>[] Tests = {BinaronTest, NewtonsoftJsonTest, NetCore3JsonTest};
+        private static readonly Func<Task>[] Tests = {NetCore3JsonTest, NewtonsoftJsonTest, BinaronTest};
 
         public static async Task Main()
         {
-            const int loop = 15;
-
             await Task.Yield();
-            await Tester(loop);
+            await Tester();
         }
 
-        private static async Task Tester(int loop)
+        private static async Task Tester()
         {
             foreach (var test in Tests)
             {
-                Console.WriteLine($"Warming up before running {test.Method.Name}");
+                var testName = test.Method.Name;
+                Console.WriteLine($"{testName}");
+                Console.WriteLine(new string('=', testName.Length));
 
-                for (var j = 0; j < loop; j++)
-                    await test(); // pre-warm-up
+                Console.WriteLine("Warm-up");
 
-                Console.WriteLine($"Running {test.Method.Name}");
+                await test(); // pre-warm-up
+
+                Console.WriteLine("Running");
 
                 var sw = new Stopwatch();
                 sw.Start();
 
-                for (var j = 0; j < loop; j++)
-                    await test();
+                await test();
 
                 sw.Stop();
-                Console.WriteLine($"{test.Method.Name} {sw.ElapsedMilliseconds / loop} ms/op");
+                Console.WriteLine($"Result: {sw.ElapsedMilliseconds / (double) Loop:F3} ms/op");
+                Console.WriteLine();
             }
         }
 
@@ -52,7 +55,7 @@ namespace SerializerBattle
         {
             var serializerOptions = new SerializerOptions {SkipNullValues = true};
             using var stream = new MemoryStream();
-            for (var i = 0; i < 50; i++)
+            for (var i = 0; i < Loop; i++)
             {
                 BinaronConvert.Serialize(Source, stream, serializerOptions);
                 stream.Position = 0;
@@ -68,7 +71,7 @@ namespace SerializerBattle
         {
             var ser = new JsonSerializer {NullValueHandling = NullValueHandling.Ignore};
             using var stream = new MemoryStream();
-            for (var i = 0; i < 50; i++)
+            for (var i = 0; i < Loop; i++)
             {
                 {
                     using var writer = new StreamWriter(stream, leaveOpen: true);
@@ -90,19 +93,29 @@ namespace SerializerBattle
 
         private static async Task NetCore3JsonTest()
         {
+#if PRINT_BREAKDOWN
             var swSerialize = new Stopwatch();
             var swDeserialize = new Stopwatch();
+#endif
             var jsonSerializerOptions = new JsonSerializerOptions {IgnoreNullValues = true};
             await using var stream = new MemoryStream();
-            for (var i = 0; i < 50; i++)
+            for (var i = 0; i < Loop; i++)
             {
+#if PRINT_BREAKDOWN
                 swSerialize.Start();
+#endif
                 await CoreJsonSerializer.SerializeAsync(stream, Source, jsonSerializerOptions);
+#if PRINT_BREAKDOWN
                 swSerialize.Stop();
+#endif
                 stream.Position = 0;
+#if PRINT_BREAKDOWN
                 swDeserialize.Start();
+#endif
                 var book = await CoreJsonSerializer.DeserializeAsync<Book>(stream);
+#if PRINT_BREAKDOWN
                 swDeserialize.Stop();
+#endif
                 stream.Position = 0;
                 Trace.Assert(book.Title != null);
             }
@@ -149,11 +162,11 @@ namespace SerializerBattle
                             "Binaron.Serializer is a serializer for modern programming languages. First class languages will be able to support the Binary Object Notation afforded by this library."
                         }
                     },
-                    MeanRankings = new double[50]
+                    MeanRankings = new double[1000]
                 };
 
                 var rnd = new Random(5);
-                for (var i = 0; i < 150; i++)
+                for (var i = 0; i < 500; i++)
                     book.Pages.Add(CreateNewPage(rnd));
                 for (var i = 0; i < book.MeanRankings.Length; i++)
                     book.MeanRankings[i] = rnd.NextDouble();
@@ -166,7 +179,35 @@ namespace SerializerBattle
                 {
                     Identity = Guid.NewGuid(),
                     Text =
-                        "This is pretty amazing, thank you. It allowed me to create a generic interface for calling into a bunch of pre-existing methods each written for specific types, that could not (or with great difficulty at least) be re-written generically. It was starting to look like I would have to do some horrible if (type == typeof(int)) and then cast back to the generic type w/ extra boxing / unboxing return (T)(object)result;(because the type is only logically known, not statically known)",
+                        @"One of the suggestions for a blog entry was the managed memory model. 
+This is timely, because we’ve just been revising our overall approach to this confusing topic. 
+For the most part, I write about product decisions that have already been made and shipped. 
+In this note, I’m talking about future directions. 
+
+Be skeptical. So what is a memory model? It’s the abstraction that makes the reality of today’s exotic hardware comprehensible to software developers. 
+The reality of hardware is that CPUs are renaming registers, performing speculative and out-of-order execution, and fixing up the world during retirement. 
+Memory state is cached at various levels in the system (L0 thru L3 on modern X86 boxes, presumably with more levels on the way). 
+Some levels of cache are shared between particular CPUs but not others. 
+For example, L0 is typically per-CPU but a hyper-threaded CPU may share L0 between the logical CPUs of a single physical CPU. 
+Or an 8-way box may split the system into two hemispheres with cache controllers performing an elaborate coherency protocol between these separate hemispheres. 
+
+If you consider caching effects, at some level all MP (multi-processor) computers are NUMA (non-uniform memory access). 
+But there’s enough magic going on that even a Unisys 32-way can generally be considered as UMA by developers. 
+It’s reasonable for the CLR to know as much as possible about the cache architecture of your hardware so that it can exploit any imbalances. 
+For example, the developers on our performance team have experimented with a scalable rendezvous for phases of the GC. 
+The idea was that each CPU establishes a rendezvous with the CPU that is “closest” to it in distance in the cache hierarchy, 
+and then one of this pair cascades up a tree to its closest neighbor until we reach a single root CPU. 
+
+At that point, the rendezvous is complete. 
+I think the jury is still out on this particular technique, but they have found some other techniques that really pay off on the larger systems. 
+Of course, it’s absolutely unreasonable for any managed developer (or 99.99% of unmanaged developers) to ever concern themselves with these imbalances. 
+Instead, software developers want to treat all computers as equivalent. 
+
+For managed developers, the CLR is the computer and it better work consistently regardless of the underlying machine.
+Although managed developers shouldn’t know the difference between a 4-way AMD server and an Intel P4 hyper-threaded dual proc, they still need to face the realities of today’s hardware. 
+Today, I think the penalty of a CPU cache miss that goes all the way to main memory is about 1/10th the penalty of a memory miss that goes all the way to disk. 
+And the trend is clear.
+",
                     Notes = new List<Notes>
                     {
                         new Notes
